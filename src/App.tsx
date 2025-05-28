@@ -7,7 +7,46 @@ import { Label } from "./components/ui/label"
 import { Checkbox } from "./components/ui/checkbox"
 import { Switch } from "./components/ui/switch"
 import { Badge } from "./components/ui/badge"
-import { Timer, CheckCircle2, ListTodo, Settings, Bell, BellOff, Play, Pause, RotateCcw } from 'lucide-react'
+import { 
+  Timer, 
+  CheckCircle2, 
+  ListTodo, 
+  Settings, 
+  Bell, 
+  BellOff, 
+  Play, 
+  Pause, 
+  RotateCcw, 
+  Tag, 
+  Plus, 
+  X,
+  Filter
+} from 'lucide-react'
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "./components/ui/dropdown-menu"
+import { Popover, PopoverContent, PopoverTrigger } from "./components/ui/popover"
+
+// Define tag colors
+const TAG_COLORS = [
+  "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+  "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+  "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
+  "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
+  "bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300",
+  "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300",
+  "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
+];
+
+// Define tag type
+type Tag = {
+  id: string;
+  name: string;
+  colorIndex: number;
+};
 
 function App() {
   // Pomodoro states
@@ -25,6 +64,12 @@ function App() {
     longBreakInterval: 4
   });
 
+  // Tags state
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [newTagName, setNewTagName] = useState('');
+  const [newTagColorIndex, setNewTagColorIndex] = useState(0);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+
   // Todo list states
   const [todos, setTodos] = useState<Array<{
     id: string;
@@ -32,8 +77,10 @@ function App() {
     completed: boolean;
     pomodoros: number;
     completedPomodoros: number;
+    tagIds: string[];
   }>>([]);
   const [newTodoText, setNewTodoText] = useState('');
+  const [newTodoTags, setNewTodoTags] = useState<string[]>([]);
   const [selectedTodoId, setSelectedTodoId] = useState<string | null>(null);
 
   // Load data from localStorage on initial render
@@ -41,9 +88,16 @@ function App() {
     const savedTodos = localStorage.getItem('todos');
     const savedSettings = localStorage.getItem('settings');
     const savedCompletedPomodoros = localStorage.getItem('completedPomodoros');
+    const savedTags = localStorage.getItem('tags');
     
     if (savedTodos) {
-      setTodos(JSON.parse(savedTodos));
+      // Handle migration from old format to new format with tags
+      const parsedTodos = JSON.parse(savedTodos);
+      if (parsedTodos.length > 0 && !('tagIds' in parsedTodos[0])) {
+        setTodos(parsedTodos.map((todo: any) => ({...todo, tagIds: []})));
+      } else {
+        setTodos(parsedTodos);
+      }
     }
     
     if (savedSettings) {
@@ -52,6 +106,10 @@ function App() {
     
     if (savedCompletedPomodoros) {
       setCompletedPomodoros(parseInt(savedCompletedPomodoros));
+    }
+
+    if (savedTags) {
+      setTags(JSON.parse(savedTags));
     }
   }, []);
 
@@ -67,6 +125,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem('completedPomodoros', completedPomodoros.toString());
   }, [completedPomodoros]);
+
+  useEffect(() => {
+    localStorage.setItem('tags', JSON.stringify(tags));
+  }, [tags]);
 
   // Timer logic
   useEffect(() => {
@@ -128,6 +190,67 @@ function App() {
     audio.play().catch(error => console.error('Error playing sound:', error));
   };
 
+  // Tag functions
+  const addTag = () => {
+    if (newTagName.trim()) {
+      const newTag: Tag = {
+        id: Date.now().toString(),
+        name: newTagName.trim(),
+        colorIndex: newTagColorIndex
+      };
+      setTags([...tags, newTag]);
+      setNewTagName('');
+      setNewTagColorIndex((newTagColorIndex + 1) % TAG_COLORS.length);
+    }
+  };
+
+  const deleteTag = (id: string) => {
+    // Remove tag from all todos
+    setTodos(todos.map(todo => ({
+      ...todo,
+      tagIds: todo.tagIds.filter(tagId => tagId !== id)
+    })));
+    
+    // Remove tag from selected filter tags
+    setSelectedTagIds(selectedTagIds.filter(tagId => tagId !== id));
+    
+    // Remove tag from new todo tags
+    setNewTodoTags(newTodoTags.filter(tagId => tagId !== id));
+    
+    // Remove tag from tags list
+    setTags(tags.filter(tag => tag.id !== id));
+  };
+
+  const toggleTagFilter = (tagId: string) => {
+    setSelectedTagIds(
+      selectedTagIds.includes(tagId)
+        ? selectedTagIds.filter(id => id !== tagId)
+        : [...selectedTagIds, tagId]
+    );
+  };
+
+  const toggleTagForNewTodo = (tagId: string) => {
+    setNewTodoTags(
+      newTodoTags.includes(tagId)
+        ? newTodoTags.filter(id => id !== tagId)
+        : [...newTodoTags, tagId]
+    );
+  };
+
+  const toggleTagForTodo = (todoId: string, tagId: string) => {
+    setTodos(todos.map(todo => {
+      if (todo.id === todoId) {
+        return {
+          ...todo,
+          tagIds: todo.tagIds.includes(tagId)
+            ? todo.tagIds.filter(id => id !== tagId)
+            : [...todo.tagIds, tagId]
+        };
+      }
+      return todo;
+    }));
+  };
+
   // Todo list functions
   const addTodo = () => {
     if (newTodoText.trim()) {
@@ -136,10 +259,12 @@ function App() {
         text: newTodoText.trim(),
         completed: false,
         pomodoros: 1,
-        completedPomodoros: 0
+        completedPomodoros: 0,
+        tagIds: newTodoTags
       };
       setTodos([...todos, newTodo]);
       setNewTodoText('');
+      setNewTodoTags([]);
     }
   };
 
@@ -194,6 +319,12 @@ function App() {
       setTimeLeft(settings.longBreakTime * 60);
     }
   };
+
+  // Filter todos based on selected tags
+  const filteredTodos = todos.filter(todo => {
+    if (selectedTagIds.length === 0) return true;
+    return selectedTagIds.some(tagId => todo.tagIds.includes(tagId));
+  });
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8 flex flex-col">
@@ -330,9 +461,30 @@ function App() {
                           {todo.text}
                         </Label>
                       </div>
-                      <Badge variant="outline">
-                        {todo.completedPomodoros}/{todo.pomodoros}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        {todo.tagIds.length > 0 && (
+                          <div className="flex gap-1">
+                            {todo.tagIds.slice(0, 2).map(tagId => {
+                              const tag = tags.find(t => t.id === tagId);
+                              return tag ? (
+                                <Badge 
+                                  key={tag.id} 
+                                  variant="outline"
+                                  className={TAG_COLORS[tag.colorIndex]}
+                                >
+                                  {tag.name}
+                                </Badge>
+                              ) : null;
+                            })}
+                            {todo.tagIds.length > 2 && (
+                              <Badge variant="outline">+{todo.tagIds.length - 2}</Badge>
+                            )}
+                          </div>
+                        )}
+                        <Badge variant="outline">
+                          {todo.completedPomodoros}/{todo.pomodoros}
+                        </Badge>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -358,93 +510,233 @@ function App() {
                   e.preventDefault();
                   addTodo();
                 }}
-                className="flex gap-2"
+                className="space-y-4"
               >
-                <Input 
-                  placeholder="What do you need to do?" 
-                  value={newTodoText}
-                  onChange={(e) => setNewTodoText(e.target.value)}
-                  className="flex-1"
-                />
-                <Button type="submit">Add Task</Button>
+                <div className="flex gap-2">
+                  <Input 
+                    placeholder="What do you need to do?" 
+                    value={newTodoText}
+                    onChange={(e) => setNewTodoText(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button type="submit">Add Task</Button>
+                </div>
+                
+                <div className="flex flex-wrap gap-2 items-center">
+                  <span className="text-sm text-muted-foreground">Tags:</span>
+                  {newTodoTags.map(tagId => {
+                    const tag = tags.find(t => t.id === tagId);
+                    return tag ? (
+                      <Badge 
+                        key={tag.id} 
+                        variant="outline"
+                        className={`${TAG_COLORS[tag.colorIndex]} cursor-pointer`}
+                        onClick={() => toggleTagForNewTodo(tag.id)}
+                      >
+                        {tag.name}
+                        <X className="ml-1 h-3 w-3" />
+                      </Badge>
+                    ) : null;
+                  })}
+                  
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-7">
+                        <Plus className="h-3.5 w-3.5 mr-1" />
+                        Add Tag
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-56 p-2">
+                      <div className="space-y-2">
+                        {tags.length > 0 ? (
+                          <div className="grid grid-cols-2 gap-1">
+                            {tags.map(tag => (
+                              <Badge 
+                                key={tag.id} 
+                                variant={newTodoTags.includes(tag.id) ? "default" : "outline"}
+                                className={`${TAG_COLORS[tag.colorIndex]} cursor-pointer`}
+                                onClick={() => toggleTagForNewTodo(tag.id)}
+                              >
+                                {tag.name}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">No tags yet. Create one in Settings.</p>
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </form>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Your Tasks</CardTitle>
+            <CardHeader className="pb-2">
+              <div className="flex justify-between items-center">
+                <CardTitle>Your Tasks</CardTitle>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8">
+                      <Filter className="h-4 w-4 mr-1" />
+                      Filter
+                      {selectedTagIds.length > 0 && (
+                        <Badge className="ml-1 h-5 px-1">{selectedTagIds.length}</Badge>
+                      )}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56 p-2">
+                    <div className="space-y-2">
+                      {tags.length > 0 ? (
+                        <div className="grid grid-cols-2 gap-1">
+                          {tags.map(tag => (
+                            <Badge 
+                              key={tag.id} 
+                              variant={selectedTagIds.includes(tag.id) ? "default" : "outline"}
+                              className={`${TAG_COLORS[tag.colorIndex]} cursor-pointer`}
+                              onClick={() => toggleTagFilter(tag.id)}
+                            >
+                              {tag.name}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No tags yet. Create one in Settings.</p>
+                      )}
+                      {selectedTagIds.length > 0 && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="w-full mt-2"
+                          onClick={() => setSelectedTagIds([])}
+                        >
+                          Clear Filters
+                        </Button>
+                      )}
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
               <CardDescription>
-                {todos.filter(todo => !todo.completed).length} remaining, {todos.filter(todo => todo.completed).length} completed
+                {filteredTodos.filter(todo => !todo.completed).length} remaining, {filteredTodos.filter(todo => todo.completed).length} completed
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {todos.length === 0 ? (
+              {filteredTodos.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  <p>No tasks yet. Add some tasks to get started!</p>
+                  <p>No tasks match your filters. Try clearing filters or add some tasks to get started!</p>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {/* Active Tasks */}
                   <div className="space-y-2">
                     <h3 className="font-medium">Active Tasks</h3>
-                    {todos.filter(todo => !todo.completed).length === 0 ? (
+                    {filteredTodos.filter(todo => !todo.completed).length === 0 ? (
                       <p className="text-sm text-muted-foreground">No active tasks</p>
                     ) : (
-                      todos
+                      filteredTodos
                         .filter(todo => !todo.completed)
                         .map(todo => (
-                          <div key={todo.id} className="flex items-center justify-between border rounded-md p-3">
-                            <div className="flex items-center gap-3 flex-1">
-                              <Checkbox 
-                                id={`todo-${todo.id}`}
-                                checked={todo.completed}
-                                onCheckedChange={() => toggleTodoCompletion(todo.id)}
-                              />
-                              <div className="flex-1">
-                                <Label htmlFor={`todo-${todo.id}`} className="cursor-pointer">
-                                  {todo.text}
-                                </Label>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <Badge variant="outline" className="text-xs">
-                                    {todo.completedPomodoros}/{todo.pomodoros} pomodoros
-                                  </Badge>
-                                  {selectedTodoId === todo.id && (
-                                    <Badge variant="default" className="text-xs">Selected</Badge>
-                                  )}
+                          <div key={todo.id} className="flex flex-col border rounded-md p-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3 flex-1">
+                                <Checkbox 
+                                  id={`todo-${todo.id}`}
+                                  checked={todo.completed}
+                                  onCheckedChange={() => toggleTodoCompletion(todo.id)}
+                                />
+                                <div className="flex-1">
+                                  <Label htmlFor={`todo-${todo.id}`} className="cursor-pointer">
+                                    {todo.text}
+                                  </Label>
                                 </div>
                               </div>
+                              <div className="flex items-center gap-1">
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  onClick={() => updateTodoPomodoros(todo.id, -1)}
+                                  disabled={todo.pomodoros <= 1}
+                                >
+                                  -
+                                </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  onClick={() => updateTodoPomodoros(todo.id, 1)}
+                                >
+                                  +
+                                </Button>
+                                <Button 
+                                  variant={selectedTodoId === todo.id ? "default" : "outline"} 
+                                  size="sm"
+                                  onClick={() => selectTodoForPomodoro(todo.id)}
+                                >
+                                  {selectedTodoId === todo.id ? "Selected" : "Select"}
+                                </Button>
+                                <Button 
+                                  variant="destructive" 
+                                  size="sm"
+                                  onClick={() => deleteTodo(todo.id)}
+                                >
+                                  Delete
+                                </Button>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-1">
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                onClick={() => updateTodoPomodoros(todo.id, -1)}
-                                disabled={todo.pomodoros <= 1}
-                              >
-                                -
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                onClick={() => updateTodoPomodoros(todo.id, 1)}
-                              >
-                                +
-                              </Button>
-                              <Button 
-                                variant={selectedTodoId === todo.id ? "default" : "outline"} 
-                                size="sm"
-                                onClick={() => selectTodoForPomodoro(todo.id)}
-                              >
-                                {selectedTodoId === todo.id ? "Selected" : "Select"}
-                              </Button>
-                              <Button 
-                                variant="destructive" 
-                                size="sm"
-                                onClick={() => deleteTodo(todo.id)}
-                              >
-                                Delete
-                              </Button>
+                            
+                            <div className="flex flex-wrap gap-2 mt-2 ml-8">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-xs">
+                                  {todo.completedPomodoros}/{todo.pomodoros} pomodoros
+                                </Badge>
+                                {selectedTodoId === todo.id && (
+                                  <Badge variant="default" className="text-xs">Selected</Badge>
+                                )}
+                              </div>
+                              
+                              <div className="flex flex-wrap gap-1 items-center">
+                                {todo.tagIds.map(tagId => {
+                                  const tag = tags.find(t => t.id === tagId);
+                                  return tag ? (
+                                    <Badge 
+                                      key={tag.id} 
+                                      variant="outline"
+                                      className={TAG_COLORS[tag.colorIndex]}
+                                    >
+                                      {tag.name}
+                                    </Badge>
+                                  ) : null;
+                                })}
+                                
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button variant="outline" size="sm" className="h-6 px-2">
+                                      <Tag className="h-3 w-3" />
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-56 p-2">
+                                    <div className="space-y-2">
+                                      {tags.length > 0 ? (
+                                        <div className="grid grid-cols-2 gap-1">
+                                          {tags.map(tag => (
+                                            <Badge 
+                                              key={tag.id} 
+                                              variant={todo.tagIds.includes(tag.id) ? "default" : "outline"}
+                                              className={`${TAG_COLORS[tag.colorIndex]} cursor-pointer`}
+                                              onClick={() => toggleTagForTodo(todo.id, tag.id)}
+                                            >
+                                              {tag.name}
+                                            </Badge>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p className="text-sm text-muted-foreground">No tags yet. Create one in Settings.</p>
+                                      )}
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
+                              </div>
                             </div>
                           </div>
                         ))
@@ -452,33 +744,52 @@ function App() {
                   </div>
 
                   {/* Completed Tasks */}
-                  {todos.filter(todo => todo.completed).length > 0 && (
+                  {filteredTodos.filter(todo => todo.completed).length > 0 && (
                     <div className="space-y-2">
                       <h3 className="font-medium">Completed Tasks</h3>
-                      {todos
+                      {filteredTodos
                         .filter(todo => todo.completed)
                         .map(todo => (
-                          <div key={todo.id} className="flex items-center justify-between border rounded-md p-3 bg-muted/30">
-                            <div className="flex items-center gap-3 flex-1">
-                              <Checkbox 
-                                id={`todo-${todo.id}`}
-                                checked={todo.completed}
-                                onCheckedChange={() => toggleTodoCompletion(todo.id)}
-                              />
-                              <Label 
-                                htmlFor={`todo-${todo.id}`} 
-                                className="cursor-pointer line-through text-muted-foreground"
+                          <div key={todo.id} className="flex flex-col border rounded-md p-3 bg-muted/30">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3 flex-1">
+                                <Checkbox 
+                                  id={`todo-${todo.id}`}
+                                  checked={todo.completed}
+                                  onCheckedChange={() => toggleTodoCompletion(todo.id)}
+                                />
+                                <Label 
+                                  htmlFor={`todo-${todo.id}`} 
+                                  className="cursor-pointer line-through text-muted-foreground"
+                                >
+                                  {todo.text}
+                                </Label>
+                              </div>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => deleteTodo(todo.id)}
                               >
-                                {todo.text}
-                              </Label>
+                                Delete
+                              </Button>
                             </div>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => deleteTodo(todo.id)}
-                            >
-                              Delete
-                            </Button>
+                            
+                            {todo.tagIds.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2 ml-8">
+                                {todo.tagIds.map(tagId => {
+                                  const tag = tags.find(t => t.id === tagId);
+                                  return tag ? (
+                                    <Badge 
+                                      key={tag.id} 
+                                      variant="outline"
+                                      className={`${TAG_COLORS[tag.colorIndex]} opacity-60`}
+                                    >
+                                      {tag.name}
+                                    </Badge>
+                                  ) : null;
+                                })}
+                              </div>
+                            )}
                           </div>
                         ))
                       }
@@ -569,6 +880,79 @@ function App() {
             <CardFooter>
               <Button onClick={resetTimer}>Apply Settings</Button>
             </CardFooter>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>Tag Management</CardTitle>
+              <CardDescription>Create and manage tags to categorize your tasks</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  addTag();
+                }}
+                className="flex gap-2"
+              >
+                <Input 
+                  placeholder="New tag name" 
+                  value={newTagName}
+                  onChange={(e) => setNewTagName(e.target.value)}
+                  className="flex-1"
+                />
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" type="button" className="w-24">
+                      <div className={`w-3 h-3 rounded-full mr-2 ${TAG_COLORS[newTagColorIndex].split(' ')[0]}`}></div>
+                      Color
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <div className="grid grid-cols-4 gap-1 p-1">
+                      {TAG_COLORS.map((_, index) => (
+                        <Button 
+                          key={index}
+                          variant="ghost"
+                          className="w-8 h-8 p-0"
+                          onClick={() => setNewTagColorIndex(index)}
+                        >
+                          <div className={`w-5 h-5 rounded-full ${TAG_COLORS[index].split(' ')[0]}`}></div>
+                        </Button>
+                      ))}
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button type="submit">Add Tag</Button>
+              </form>
+              
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium">Your Tags</h3>
+                {tags.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No tags yet. Create one above.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {tags.map(tag => (
+                      <Badge 
+                        key={tag.id} 
+                        variant="outline"
+                        className={TAG_COLORS[tag.colorIndex]}
+                      >
+                        {tag.name}
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-4 w-4 p-0 ml-1"
+                          onClick={() => deleteTag(tag.id)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
           </Card>
           
           <Card>
