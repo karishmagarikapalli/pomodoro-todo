@@ -9,11 +9,12 @@
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 </head>
 <body>
+  <div id="root"></div>
   <script>
     // Register service worker for PWA functionality
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/service-worker.js')
+        navigator.serviceWorker.register('./service-worker.js')
           .then(registration => {
             console.log('ServiceWorker registration successful with scope: ', registration.scope);
           })
@@ -22,9 +23,6 @@
           });
       });
     }
-    
-    // Redirect to the actual app
-    window.location.href = './index.html';
   </script>
 </body>
 </html>
